@@ -60,6 +60,20 @@
       "description": "Choose the period of time to analyze.",
       "title": "Time Range"
     },
+    "time_frequency": {
+      "additionalProperties": false,
+      "properties": {
+        "time_frequency": {
+          "$ref": "#/$defs/TimeFrequency",
+          "title": "Time Frequency"
+        }
+      },
+      "required": [
+        "time_frequency"
+      ],
+      "type": "object",
+      "title": "Select Time Frequency"
+    },
     "er_client_name": {
       "additionalProperties": false,
       "properties": {
@@ -105,6 +119,19 @@
       "title": "TimezoneInfo",
       "type": "object"
     },
+    "TimeFrequency": {
+      "enum": [
+        "Year",
+        "Quarter",
+        "Month",
+        "Week",
+        "Day",
+        "Hour",
+        "Minute"
+      ],
+      "title": "TimeFrequency",
+      "type": "string"
+    },
     "EarthRangerConnection": {
       "properties": {
         "name": {
@@ -137,6 +164,7 @@
     "ui:order": [
       "workflow_details",
       "time_range",
+      "time_frequency",
       "er_client_name"
     ]
   },

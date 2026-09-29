@@ -16,6 +16,11 @@ requirements:
     version: "1.0.0.*"
     channel: https://repo.prefix.dev/ecoscope-workflows-custom/
 
+  - name: ecoscope-workflows-ext-wwf-virunga
+    version: "0.0.1.*"
+    channel: https://repo.prefix.dev/ecoscope-workflows-custom/
+
+
   - name: pydeck
     version: 0.9.2
     channel: conda-forge
@@ -23,6 +28,11 @@ requirements:
   - name: opentelemetry-sdk
     version: ">=1.20.0,<2.0.0"
     channel: conda-forge
+
+rjsf-overrides:
+  $defs:
+    TimeFrequency.enum: ["Day", "Week", "Month", "Quarter", "Year"]
+    TimeFrequency.default: "Month"
 
 task-instance-defaults:
   skipif:
@@ -44,6 +54,42 @@ workflow:
     task: set_groupers
     partial: 
       groupers: []
+
+
+  - name: Select Time Frequency
+    id: time_frequency
+    task: ecoscope_workflows_ext_wwf_virunga.tasks.plot.select_time_frequency
+
+
+  # One palette for every chart, so a category keeps the same color across the dashboard.
+  # A custom list keeps these exact colors (named colormaps get resampled to the category count).
+  - name: Set chart color palette
+    id: category_color_palette
+    task: ecoscope_workflows_ext_wwf_virunga.tasks.transformation.set_color_palette
+    partial:
+      color_palette:
+        type_: custom
+        colors:
+          - "#1f77b4"
+          - "#ff7f0e"
+          - "#2ca02c"
+          - "#d62728"
+          - "#9467bd"
+          - "#8c564b"
+          - "#e377c2"
+          - "#7f7f7f"
+          - "#bcbd22"
+          - "#17becf"
+          - "#aec7e8"
+          - "#ffbb78"
+          - "#98df8a"
+          - "#ff9896"
+          - "#c5b0d5"
+          - "#c49c94"
+          - "#f7b6d2"
+          - "#c7c7c7"
+          - "#dbdb8d"
+          - "#9edae5"
 
   - name: Connect to EarthRanger
     id: er_client_name
@@ -289,6 +335,18 @@ workflow:
         }
       raise_if_not_found: false
 
+
+  - name: Assign colors to balloon companies
+    id: balloon_company_colors
+    task: ecoscope_workflows_ext_wwf_virunga.tasks.transformation.apply_cmap
+    partial:
+      df: ${{ workflow.remove_balloon_brackets.return }}
+      input_column_name: balloon_company
+      color_palette: ${{ workflow.category_color_palette.return }}
+      output_column_name: balloon_company_colors
+      color_format: "rgba_tuple"
+      alpha: 1.0
+
   - name: Persist balloon landing summary table
     id: persist_balloon_landing
     task: persist_df
@@ -330,6 +388,112 @@ workflow:
       data: ${{ workflow.balloon_landing_table_html_url.return }}
 
   # map airstrip operations
+
+  # balloon landing charts
+  - name: Draw balloon passengers over time line chart
+    id: balloon_pax_chart
+    task: ecoscope_workflows_ext_wwf_virunga.tasks.plot.draw_grouped_line_time_series_chart
+    partial:
+      dataframe: ${{ workflow.balloon_company_colors.return }}
+      x_axis: "date"
+      y_axis: "no_of_passengers"
+      group_column: "balloon_company"
+      agg_function: "sum"
+      time_frequency: ${{ workflow.time_frequency.return }}
+      group_order: null
+      fill: false 
+      ascending: false 
+      color_column: "balloon_company_colors"
+      plot_style: null
+      line_style: null 
+      widget_id: null
+      layout_style:
+        font_size: 10
+        plot_bgcolor: "#f5f5f5"
+        font_color: null 
+        font_style: null 
+        showlegend: true
+        legend_title: null
+        title: null 
+        title_x: 0.5 
+        title_y: 0.95
+        xaxis:
+          title: "Date"
+        yaxis:
+          title: "Passengers"
+
+  - name: Save balloon passengers over time chart (HTML)
+    id: balloon_pax_chart_html_url
+    task: persist_text
+    partial:
+      root_path: ${{ env.ECOSCOPE_WORKFLOWS_RESULTS }}
+      filename: null
+      filename_suffix: balloon_pax_chart
+      text: ${{ workflow.balloon_pax_chart.return }}
+
+  - name: Create balloon passengers over time chart widget
+    id: balloon_pax_chart_widget
+    task: create_plot_widget_single_view
+    skipif:
+      conditions:
+        - never
+    partial:
+      title: "Balloon Passengers Over Time"
+      data: ${{ workflow.balloon_pax_chart_html_url.return }}
+
+  - name: Draw balloon passengers by lodge bar chart
+    id: balloon_lodge_chart
+    task: ecoscope_workflows_ext_wwf_virunga.tasks.plot.draw_bar_chart
+    partial:
+      dataframe: ${{ workflow.balloon_company_colors.return }}
+      category: "where_are_clients_staying"
+      mode: stacked
+      y_axis: "no_of_passengers"
+      stack_column: "balloon_company"
+      agg_function: "sum"
+      ascending: true
+      widget_id: null
+      color_column: "balloon_company_colors"      
+      plot_style:
+        xperiodalignment: "middle"
+      overlay_opacity: 0.6 
+      category_order: null
+      stack_order: null
+      bar_chart_configs: null 
+      layout_style:
+        bargap: 0.05
+        bargroupgap: 0.05
+        title: null
+        title_x: 0.01
+        title_y: 0.95
+        showlegend: true
+        font_size: 10
+        font_color: "#222222"
+        plot_bgcolor: "#f5f5f5"
+        xaxis:
+          title: "Where clients are staying"
+        yaxis:
+          title: "Passengers"
+
+  - name: Save balloon passengers by lodge chart (HTML)
+    id: balloon_lodge_chart_html_url
+    task: persist_text
+    partial:
+      root_path: ${{ env.ECOSCOPE_WORKFLOWS_RESULTS }}
+      filename: null
+      filename_suffix: balloon_lodge_chart
+      text: ${{ workflow.balloon_lodge_chart.return }}
+
+  - name: Create balloon passengers by lodge chart widget
+    id: balloon_lodge_chart_widget
+    task: create_plot_widget_single_view
+    skipif:
+      conditions:
+        - never
+    partial:
+      title: "Balloon Passengers by Lodge"
+      data: ${{ workflow.balloon_lodge_chart_html_url.return }}
+
   - name: Map airstrip operation columns 
     id: map_airstrip_op_columns 
     task: map_columns
@@ -419,6 +583,20 @@ workflow:
         }
       raise_if_not_found: false
 
+
+  # Arrival/Departure use the palette's first two colors. The grouped bar chart sets one hex color
+  # per bar, so both airstrip charts use this fixed mapping to match each other.
+  - name: Assign colors to arrivals and departures
+    id: airstrip_direction_colors
+    task: apply_color_map
+    partial:
+      df: ${{ workflow.convert_airstrip_op_ints.return }}
+      input_column_name: arrival_departure
+      output_column_name: arrival_departure_colors
+      colormap:
+        Arrival: "#1f77b4"
+        Departure: "#ff7f0e"
+
   - name: Persist airstrip operations summary table
     id: persist_airstrip_operations
     task: persist_df
@@ -459,6 +637,124 @@ workflow:
       title: "Airstrip Operations Summary"
       data: ${{ workflow.airstrip_op_table_html_url.return }}
 
+
+  # airstrip operations charts
+  - name: Draw airstrip clients over time line chart
+    id: airstrip_clients_chart
+    task: ecoscope_workflows_ext_wwf_virunga.tasks.plot.draw_grouped_line_time_series_chart
+    partial:
+      dataframe: ${{ workflow.airstrip_direction_colors.return }}
+      x_axis: "date"
+      y_axis: "no_of_clients"
+      group_column: "arrival_departure"
+      agg_function: "sum"
+      time_frequency: ${{ workflow.time_frequency.return }}
+      group_order: null 
+      fill: false
+      ascending: false 
+      color_column: "arrival_departure_colors"
+      plot_style: null
+      line_style: null 
+      widget_id: null
+      layout_style:
+        font_size: 10
+        plot_bgcolor: "#f5f5f5"
+        font_color: null 
+        font_style: null 
+        showlegend: true
+        legend_title: null
+        title: null 
+        title_x: 0.5 
+        title_y: 0.95
+        xaxis:
+          title: "Date"
+        yaxis:
+          title: "Clients"
+
+  - name: Save airstrip clients over time chart (HTML)
+    id: airstrip_clients_chart_html_url
+    task: persist_text
+    partial:
+      root_path: ${{ env.ECOSCOPE_WORKFLOWS_RESULTS }}
+      filename: null
+      filename_suffix: airstrip_clients_chart
+      text: ${{ workflow.airstrip_clients_chart.return }}
+
+  - name: Create airstrip clients over time chart widget
+    id: airstrip_clients_chart_widget
+    task: create_plot_widget_single_view
+    skipif:
+      conditions:
+        - never
+    partial:
+      title: "Airstrip Clients Over Time"
+      data: ${{ workflow.airstrip_clients_chart_html_url.return }}
+
+  - name: Draw airstrip clients by camp/lodge bar chart
+    id: airstrip_lodge_chart
+    task: ecoscope_workflows_ext_wwf_virunga.tasks.plot.draw_bar_chart
+    partial:
+      # grouped mode aggregates one column per bar, so it reads the wide table (one column per direction)
+      dataframe: ${{ workflow.rename_airstrip_op_display.return }}
+      category: "Camp Lodge"
+      mode: grouped
+      bar_chart_configs:
+        - column: "Arrival"
+          agg_func: "sum"
+          label: "Arrival"
+          show_label: false
+          style:
+            marker_color: "#1f77b4"
+        - column: "Departure"
+          agg_func: "sum"
+          label: "Departure"
+          show_label: false
+          style:
+            marker_color: "#ff7f0e"
+      y_axis: null
+      stack_column: null
+      agg_function: null
+      ascending: true
+      widget_id: null
+      color_column: null
+      plot_style: null
+      overlay_opacity: 0.6
+      category_order: null
+      stack_order: null
+      layout_style:
+        bargap: 0.05
+        bargroupgap: 0.05
+        title: null
+        title_x: 0.01
+        title_y: 0.95
+        showlegend: true
+        font_size: 10
+        font_color: "#222222"
+        plot_bgcolor: "#f5f5f5"
+        xaxis:
+          title: "Camp/Lodge"
+        yaxis:
+          title: "Clients"
+
+  - name: Save airstrip clients by camp/lodge chart (HTML)
+    id: airstrip_lodge_chart_html_url
+    task: persist_text
+    partial:
+      root_path: ${{ env.ECOSCOPE_WORKFLOWS_RESULTS }}
+      filename: null
+      filename_suffix: airstrip_lodge_chart
+      text: ${{ workflow.airstrip_lodge_chart.return }}
+
+  - name: Create airstrip clients by camp/lodge chart widget
+    id: airstrip_lodge_chart_widget
+    task: create_plot_widget_single_view
+    skipif:
+      conditions:
+        - never
+    partial:
+      title: "Airstrip Clients by Camp/Lodge"
+      data: ${{ workflow.airstrip_lodge_chart_html_url.return }}
+
   - name: Map airstrip maintenace columns
     id: map_airstrip_maintenance
     task: map_columns 
@@ -486,6 +782,18 @@ workflow:
         "maintenance_type": "Maintenance Type"
         }
       raise_if_not_found: false
+
+
+  - name: Assign colors to maintenance types
+    id: maintenance_type_colors
+    task: ecoscope_workflows_ext_wwf_virunga.tasks.transformation.apply_cmap
+    partial:
+      df: ${{ workflow.map_airstrip_maintenance.return }}
+      input_column_name: maintenance_type
+      color_palette: ${{ workflow.category_color_palette.return }}
+      output_column_name: maintenance_type_colors
+      color_format: "rgba_tuple"
+      alpha: 1.0
 
   - name: Persist airstrip maintenance summary table
     id: persist_airstrip_maintenance
@@ -529,14 +837,68 @@ workflow:
       data: ${{ workflow.airstrip_maint_table_html_url.return }}
 
     # Logistics Dashboard
+
+  # airstrip maintenance chart
+  - name: Draw airstrip maintenance over time bar chart
+    id: airstrip_maint_chart
+    task: ecoscope_workflows_ext_wwf_virunga.tasks.plot.draw_time_series_bar_chart
+    partial:
+      dataframe: ${{ workflow.maintenance_type_colors.return }}
+      x_axis: "date"
+      y_axis: "date"
+      category: "maintenance_type"
+      agg_function: "count"
+      time_frequency: ${{ workflow.time_frequency.return }}
+      color_column: "maintenance_type_colors" 
+      plot_style: null
+      widget_id: null
+      layout_style:
+        font_size: 10
+        plot_bgcolor: "#f5f5f5"
+        font_color: null 
+        font_style: null 
+        showlegend: true
+        legend_title: null
+        title: null 
+        title_x: 0.5 
+        title_y: 0.95
+        xaxis:
+          title: "Date"
+        yaxis:
+          title: "Maintenance events"
+
+  - name: Save airstrip maintenance over time chart (HTML)
+    id: airstrip_maint_chart_html_url
+    task: persist_text
+    partial:
+      root_path: ${{ env.ECOSCOPE_WORKFLOWS_RESULTS }}
+      filename: null
+      filename_suffix: airstrip_maint_chart
+      text: ${{ workflow.airstrip_maint_chart.return }}
+
+  - name: Create airstrip maintenance over time chart widget
+    id: airstrip_maint_chart_widget
+    task: create_plot_widget_single_view
+    skipif:
+      conditions:
+        - never
+    partial:
+      title: "Airstrip Maintenance Over Time"
+      data: ${{ workflow.airstrip_maint_chart_html_url.return }}
+
   - name: MNC Logistics Dashboard
     id: logistics_dashboard
     task: gather_dashboard
     partial:
       details: ${{ workflow.workflow_details.return}}
       widgets:
+        - ${{ workflow.balloon_pax_chart_widget.return }}
+        - ${{ workflow.balloon_lodge_chart_widget.return }}
         - ${{ workflow.balloon_landing_table_widget.return }}
+        - ${{ workflow.airstrip_clients_chart_widget.return }}
+        - ${{ workflow.airstrip_lodge_chart_widget.return }}
         - ${{ workflow.airstrip_op_table_widget.return }}
+        - ${{ workflow.airstrip_maint_chart_widget.return }}
         - ${{ workflow.airstrip_maint_table_widget.return }}
       time_range: ${{ workflow.time_range.return}}
       groupers: ${{ workflow.groupers.return }}

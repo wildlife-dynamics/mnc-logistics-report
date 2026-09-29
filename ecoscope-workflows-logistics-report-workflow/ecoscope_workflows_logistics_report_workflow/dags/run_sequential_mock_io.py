@@ -18,6 +18,12 @@ from ecoscope.platform.tasks.skip import (
     any_dependency_skipped as any_dependency_skipped,
 )
 from ecoscope.platform.tasks.skip import any_is_empty_df as any_is_empty_df
+from ecoscope_workflows_ext_wwf_virunga.tasks.plot import (
+    select_time_frequency as select_time_frequency,
+)
+from ecoscope_workflows_ext_wwf_virunga.tasks.transformation import (
+    set_color_palette as set_color_palette,
+)
 from wt_contracts import validate as _validate
 from wt_task import task
 from wt_task.testing import create_func_magicmock  # 🧪
@@ -65,11 +71,15 @@ from ecoscope.platform.tasks.analysis import summarize_df as summarize_df
 from ecoscope.platform.tasks.io import persist_df as persist_df
 from ecoscope.platform.tasks.io import persist_text as persist_text
 from ecoscope.platform.tasks.results import (
+    create_plot_widget_single_view as create_plot_widget_single_view,
+)
+from ecoscope.platform.tasks.results import (
     create_table_widget_single_view as create_table_widget_single_view,
 )
 from ecoscope.platform.tasks.results import draw_table as draw_table
 from ecoscope.platform.tasks.results import gather_dashboard as gather_dashboard
 from ecoscope.platform.tasks.skip import never as never
+from ecoscope.platform.tasks.transformation import apply_color_map as apply_color_map
 from ecoscope.platform.tasks.transformation import map_columns as map_columns
 from ecoscope_workflows_ext_custom.tasks.transformation import (
     pivot_dataframe as pivot_dataframe,
@@ -79,6 +89,18 @@ from ecoscope_workflows_ext_mnc.tasks.transformation import (
 )
 from ecoscope_workflows_ext_mnc.tasks.transformation import (
     remove_brackets_from_column as remove_brackets_from_column,
+)
+from ecoscope_workflows_ext_wwf_virunga.tasks.plot import (
+    draw_bar_chart as draw_bar_chart_1,
+)
+from ecoscope_workflows_ext_wwf_virunga.tasks.plot import (
+    draw_grouped_line_time_series_chart as draw_grouped_line_time_series_chart,
+)
+from ecoscope_workflows_ext_wwf_virunga.tasks.plot import (
+    draw_time_series_bar_chart as draw_time_series_bar_chart_1,
+)
+from ecoscope_workflows_ext_wwf_virunga.tasks.transformation import (
+    apply_cmap as apply_cmap,
 )
 
 
@@ -136,6 +158,67 @@ def main(params: dict[str, Any], validate_params_schema: bool = True):
             unpack_depth=1,
         )
         .partial(groupers=[], **(params.get("groupers") or {}))
+        .call()
+    )
+
+    time_frequency = (
+        task(select_time_frequency)
+        .validate()
+        .set_task_instance_id("time_frequency")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(**(params.get("time_frequency") or {}))
+        .call()
+    )
+
+    category_color_palette = (
+        task(set_color_palette)
+        .validate()
+        .set_task_instance_id("category_color_palette")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            color_palette={
+                "type_": "custom",
+                "colors": [
+                    "#1f77b4",
+                    "#ff7f0e",
+                    "#2ca02c",
+                    "#d62728",
+                    "#9467bd",
+                    "#8c564b",
+                    "#e377c2",
+                    "#7f7f7f",
+                    "#bcbd22",
+                    "#17becf",
+                    "#aec7e8",
+                    "#ffbb78",
+                    "#98df8a",
+                    "#ff9896",
+                    "#c5b0d5",
+                    "#c49c94",
+                    "#f7b6d2",
+                    "#c7c7c7",
+                    "#dbdb8d",
+                    "#9edae5",
+                ],
+            },
+            **(params.get("category_color_palette") or {}),
+        )
         .call()
     )
 
@@ -700,6 +783,31 @@ def main(params: dict[str, Any], validate_params_schema: bool = True):
         .call()
     )
 
+    balloon_company_colors = (
+        task(apply_cmap)
+        .validate()
+        .set_task_instance_id("balloon_company_colors")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            df=remove_balloon_brackets,
+            input_column_name="balloon_company",
+            color_palette=category_color_palette,
+            output_column_name="balloon_company_colors",
+            color_format="rgba_tuple",
+            alpha=1.0,
+            **(params.get("balloon_company_colors") or {}),
+        )
+        .call()
+    )
+
     persist_balloon_landing = (
         task(persist_df)
         .validate()
@@ -789,6 +897,183 @@ def main(params: dict[str, Any], validate_params_schema: bool = True):
             title="Balloon Landing Summary",
             data=balloon_landing_table_html_url,
             **(params.get("balloon_landing_table_widget") or {}),
+        )
+        .call()
+    )
+
+    balloon_pax_chart = (
+        task(draw_grouped_line_time_series_chart)
+        .validate()
+        .set_task_instance_id("balloon_pax_chart")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            dataframe=balloon_company_colors,
+            x_axis="date",
+            y_axis="no_of_passengers",
+            group_column="balloon_company",
+            agg_function="sum",
+            time_frequency=time_frequency,
+            group_order=None,
+            fill=False,
+            ascending=False,
+            color_column="balloon_company_colors",
+            plot_style=None,
+            line_style=None,
+            widget_id=None,
+            layout_style={
+                "font_size": 10,
+                "plot_bgcolor": "#f5f5f5",
+                "font_color": None,
+                "font_style": None,
+                "showlegend": True,
+                "legend_title": None,
+                "title": None,
+                "title_x": 0.5,
+                "title_y": 0.95,
+                "xaxis": {"title": "Date"},
+                "yaxis": {"title": "Passengers"},
+            },
+            **(params.get("balloon_pax_chart") or {}),
+        )
+        .call()
+    )
+
+    balloon_pax_chart_html_url = (
+        task(persist_text)
+        .validate()
+        .set_task_instance_id("balloon_pax_chart_html_url")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            root_path=os.environ["ECOSCOPE_WORKFLOWS_RESULTS"],
+            filename=None,
+            filename_suffix="balloon_pax_chart",
+            text=balloon_pax_chart,
+            **(params.get("balloon_pax_chart_html_url") or {}),
+        )
+        .call()
+    )
+
+    balloon_pax_chart_widget = (
+        task(create_plot_widget_single_view)
+        .validate()
+        .set_task_instance_id("balloon_pax_chart_widget")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                never,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            title="Balloon Passengers Over Time",
+            data=balloon_pax_chart_html_url,
+            **(params.get("balloon_pax_chart_widget") or {}),
+        )
+        .call()
+    )
+
+    balloon_lodge_chart = (
+        task(draw_bar_chart_1)
+        .validate()
+        .set_task_instance_id("balloon_lodge_chart")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            dataframe=balloon_company_colors,
+            category="where_are_clients_staying",
+            mode="stacked",
+            y_axis="no_of_passengers",
+            stack_column="balloon_company",
+            agg_function="sum",
+            ascending=True,
+            widget_id=None,
+            color_column="balloon_company_colors",
+            plot_style={"xperiodalignment": "middle"},
+            overlay_opacity=0.6,
+            category_order=None,
+            stack_order=None,
+            bar_chart_configs=None,
+            layout_style={
+                "bargap": 0.05,
+                "bargroupgap": 0.05,
+                "title": None,
+                "title_x": 0.01,
+                "title_y": 0.95,
+                "showlegend": True,
+                "font_size": 10,
+                "font_color": "#222222",
+                "plot_bgcolor": "#f5f5f5",
+                "xaxis": {"title": "Where clients are staying"},
+                "yaxis": {"title": "Passengers"},
+            },
+            **(params.get("balloon_lodge_chart") or {}),
+        )
+        .call()
+    )
+
+    balloon_lodge_chart_html_url = (
+        task(persist_text)
+        .validate()
+        .set_task_instance_id("balloon_lodge_chart_html_url")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            root_path=os.environ["ECOSCOPE_WORKFLOWS_RESULTS"],
+            filename=None,
+            filename_suffix="balloon_lodge_chart",
+            text=balloon_lodge_chart,
+            **(params.get("balloon_lodge_chart_html_url") or {}),
+        )
+        .call()
+    )
+
+    balloon_lodge_chart_widget = (
+        task(create_plot_widget_single_view)
+        .validate()
+        .set_task_instance_id("balloon_lodge_chart_widget")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                never,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            title="Balloon Passengers by Lodge",
+            data=balloon_lodge_chart_html_url,
+            **(params.get("balloon_lodge_chart_widget") or {}),
         )
         .call()
     )
@@ -972,6 +1257,29 @@ def main(params: dict[str, Any], validate_params_schema: bool = True):
         .call()
     )
 
+    airstrip_direction_colors = (
+        task(apply_color_map)
+        .validate()
+        .set_task_instance_id("airstrip_direction_colors")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            df=convert_airstrip_op_ints,
+            input_column_name="arrival_departure",
+            output_column_name="arrival_departure_colors",
+            colormap={"Arrival": "#1f77b4", "Departure": "#ff7f0e"},
+            **(params.get("airstrip_direction_colors") or {}),
+        )
+        .call()
+    )
+
     persist_airstrip_operations = (
         task(persist_df)
         .validate()
@@ -1065,6 +1373,198 @@ def main(params: dict[str, Any], validate_params_schema: bool = True):
         .call()
     )
 
+    airstrip_clients_chart = (
+        task(draw_grouped_line_time_series_chart)
+        .validate()
+        .set_task_instance_id("airstrip_clients_chart")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            dataframe=airstrip_direction_colors,
+            x_axis="date",
+            y_axis="no_of_clients",
+            group_column="arrival_departure",
+            agg_function="sum",
+            time_frequency=time_frequency,
+            group_order=None,
+            fill=False,
+            ascending=False,
+            color_column="arrival_departure_colors",
+            plot_style=None,
+            line_style=None,
+            widget_id=None,
+            layout_style={
+                "font_size": 10,
+                "plot_bgcolor": "#f5f5f5",
+                "font_color": None,
+                "font_style": None,
+                "showlegend": True,
+                "legend_title": None,
+                "title": None,
+                "title_x": 0.5,
+                "title_y": 0.95,
+                "xaxis": {"title": "Date"},
+                "yaxis": {"title": "Clients"},
+            },
+            **(params.get("airstrip_clients_chart") or {}),
+        )
+        .call()
+    )
+
+    airstrip_clients_chart_html_url = (
+        task(persist_text)
+        .validate()
+        .set_task_instance_id("airstrip_clients_chart_html_url")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            root_path=os.environ["ECOSCOPE_WORKFLOWS_RESULTS"],
+            filename=None,
+            filename_suffix="airstrip_clients_chart",
+            text=airstrip_clients_chart,
+            **(params.get("airstrip_clients_chart_html_url") or {}),
+        )
+        .call()
+    )
+
+    airstrip_clients_chart_widget = (
+        task(create_plot_widget_single_view)
+        .validate()
+        .set_task_instance_id("airstrip_clients_chart_widget")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                never,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            title="Airstrip Clients Over Time",
+            data=airstrip_clients_chart_html_url,
+            **(params.get("airstrip_clients_chart_widget") or {}),
+        )
+        .call()
+    )
+
+    airstrip_lodge_chart = (
+        task(draw_bar_chart_1)
+        .validate()
+        .set_task_instance_id("airstrip_lodge_chart")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            dataframe=rename_airstrip_op_display,
+            category="Camp Lodge",
+            mode="grouped",
+            bar_chart_configs=[
+                {
+                    "column": "Arrival",
+                    "agg_func": "sum",
+                    "label": "Arrival",
+                    "show_label": False,
+                    "style": {"marker_color": "#1f77b4"},
+                },
+                {
+                    "column": "Departure",
+                    "agg_func": "sum",
+                    "label": "Departure",
+                    "show_label": False,
+                    "style": {"marker_color": "#ff7f0e"},
+                },
+            ],
+            y_axis=None,
+            stack_column=None,
+            agg_function=None,
+            ascending=True,
+            widget_id=None,
+            color_column=None,
+            plot_style=None,
+            overlay_opacity=0.6,
+            category_order=None,
+            stack_order=None,
+            layout_style={
+                "bargap": 0.05,
+                "bargroupgap": 0.05,
+                "title": None,
+                "title_x": 0.01,
+                "title_y": 0.95,
+                "showlegend": True,
+                "font_size": 10,
+                "font_color": "#222222",
+                "plot_bgcolor": "#f5f5f5",
+                "xaxis": {"title": "Camp/Lodge"},
+                "yaxis": {"title": "Clients"},
+            },
+            **(params.get("airstrip_lodge_chart") or {}),
+        )
+        .call()
+    )
+
+    airstrip_lodge_chart_html_url = (
+        task(persist_text)
+        .validate()
+        .set_task_instance_id("airstrip_lodge_chart_html_url")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            root_path=os.environ["ECOSCOPE_WORKFLOWS_RESULTS"],
+            filename=None,
+            filename_suffix="airstrip_lodge_chart",
+            text=airstrip_lodge_chart,
+            **(params.get("airstrip_lodge_chart_html_url") or {}),
+        )
+        .call()
+    )
+
+    airstrip_lodge_chart_widget = (
+        task(create_plot_widget_single_view)
+        .validate()
+        .set_task_instance_id("airstrip_lodge_chart_widget")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                never,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            title="Airstrip Clients by Camp/Lodge",
+            data=airstrip_lodge_chart_html_url,
+            **(params.get("airstrip_lodge_chart_widget") or {}),
+        )
+        .call()
+    )
+
     map_airstrip_maintenance = (
         task(map_columns)
         .validate()
@@ -1109,6 +1609,31 @@ def main(params: dict[str, Any], validate_params_schema: bool = True):
             rename_columns={"date": "Date", "maintenance_type": "Maintenance Type"},
             raise_if_not_found=False,
             **(params.get("rename_airstrip_maint_display") or {}),
+        )
+        .call()
+    )
+
+    maintenance_type_colors = (
+        task(apply_cmap)
+        .validate()
+        .set_task_instance_id("maintenance_type_colors")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            df=map_airstrip_maintenance,
+            input_column_name="maintenance_type",
+            color_palette=category_color_palette,
+            output_column_name="maintenance_type_colors",
+            color_format="rgba_tuple",
+            alpha=1.0,
+            **(params.get("maintenance_type_colors") or {}),
         )
         .call()
     )
@@ -1206,6 +1731,90 @@ def main(params: dict[str, Any], validate_params_schema: bool = True):
         .call()
     )
 
+    airstrip_maint_chart = (
+        task(draw_time_series_bar_chart_1)
+        .validate()
+        .set_task_instance_id("airstrip_maint_chart")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            dataframe=maintenance_type_colors,
+            x_axis="date",
+            y_axis="date",
+            category="maintenance_type",
+            agg_function="count",
+            time_frequency=time_frequency,
+            color_column="maintenance_type_colors",
+            plot_style=None,
+            widget_id=None,
+            layout_style={
+                "font_size": 10,
+                "plot_bgcolor": "#f5f5f5",
+                "font_color": None,
+                "font_style": None,
+                "showlegend": True,
+                "legend_title": None,
+                "title": None,
+                "title_x": 0.5,
+                "title_y": 0.95,
+                "xaxis": {"title": "Date"},
+                "yaxis": {"title": "Maintenance events"},
+            },
+            **(params.get("airstrip_maint_chart") or {}),
+        )
+        .call()
+    )
+
+    airstrip_maint_chart_html_url = (
+        task(persist_text)
+        .validate()
+        .set_task_instance_id("airstrip_maint_chart_html_url")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                any_is_empty_df,
+                any_dependency_skipped,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            root_path=os.environ["ECOSCOPE_WORKFLOWS_RESULTS"],
+            filename=None,
+            filename_suffix="airstrip_maint_chart",
+            text=airstrip_maint_chart,
+            **(params.get("airstrip_maint_chart_html_url") or {}),
+        )
+        .call()
+    )
+
+    airstrip_maint_chart_widget = (
+        task(create_plot_widget_single_view)
+        .validate()
+        .set_task_instance_id("airstrip_maint_chart_widget")
+        .handle_errors()
+        .with_tracing()
+        .skipif(
+            conditions=[
+                never,
+            ],
+            unpack_depth=1,
+        )
+        .partial(
+            title="Airstrip Maintenance Over Time",
+            data=airstrip_maint_chart_html_url,
+            **(params.get("airstrip_maint_chart_widget") or {}),
+        )
+        .call()
+    )
+
     logistics_dashboard = (
         task(gather_dashboard)
         .validate()
@@ -1222,8 +1831,13 @@ def main(params: dict[str, Any], validate_params_schema: bool = True):
         .partial(
             details=workflow_details,
             widgets=[
+                balloon_pax_chart_widget,
+                balloon_lodge_chart_widget,
                 balloon_landing_table_widget,
+                airstrip_clients_chart_widget,
+                airstrip_lodge_chart_widget,
                 airstrip_op_table_widget,
+                airstrip_maint_chart_widget,
                 airstrip_maint_table_widget,
             ],
             time_range=time_range,
