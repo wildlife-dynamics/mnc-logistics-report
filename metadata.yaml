@@ -1,21 +1,10 @@
-name:  # Title Case, e.g. "My Ecoscope Workflow Template"
-
-# at least one author is required
+name: MNC Logistics Report
 author:
-  - name: ""
-    organization: ""
-    email: ""
+  - name: Tevin Temu
+    organization: Wildlife Dynamics
+    email: tevin@wildlifedynamics.com
 
-description: # A short description
-
-# todo: add example
-theory: "" # optional
-
-# todo: add example
-output_comment: "" # optional
-
-# optional
-# example
-# citation: 
-#   - Wu, Y. et al. (2025). "Monitoring elephant spatial patterns with Ecoscope workflows."
-citation: [] 
+description: Processes Mara North Conservancy balloon landing, airstrip operations, and airstrip maintenance events from EarthRanger and produces summary tables of balloon passengers, airstrip client arrivals and departures, and maintenance activity, on an interactive dashboard.
+theory: "Each event type is processed as its own branch. Balloon landing records are listed by balloon company, lodge, and number of passengers; airstrip client counts are totalled per camp or lodge and pivoted into arrival and departure columns; and airstrip maintenance is kept as a dated log of maintenance types. Airline complaint events are fetched and processed but not yet published as an output."
+output_comment: "Outputs three CSV tables (balloon landings by company and lodge, airstrip clients per camp or lodge by arrival and departure, and a dated airstrip maintenance log) and a dashboard with a sortable, filterable table widget for each."
+citation: []
